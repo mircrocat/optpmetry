@@ -1,0 +1,1974 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>标准儿童近视监测助手</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    
+    <!-- Tailwind配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        accent: '#722ED1',
+                        neutral: '#F5F7FA',
+                        'neutral-dark': '#4E5969',
+                        success: '#00B42A',
+                        warning: '#FF7D00',
+                        danger: '#F53F3F',
+                        'orange-100': '#FFF3CD',
+                        'orange-600': '#FD7E14'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto { content-visibility: auto; }
+            .card-shadow { box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08); }
+            .input-focus { @apply focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none; }
+            .btn-hover { @apply hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300; }
+            .btn-active { @apply active:translate-y-0 active:shadow-md transition-all duration-150; }
+            .modal-backdrop { backdrop-filter: blur(3px); }
+            .form-error { @apply border-danger focus:border-danger focus:ring-danger/20; }
+            .error-message { @apply text-danger text-xs mt-1 hidden; }
+            .animate-shake { animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both; }
+            @keyframes shake {
+                10%, 90% { transform: translateX(-1px); }
+                20%, 80% { transform: translateX(2px); }
+                30%, 50%, 70% { transform: translateX(-3px); }
+                40%, 60% { transform: translateX(3px); }
+            }
+        }
+    </style>
+</head>
+<body class="bg-neutral min-h-screen font-sans text-neutral-dark transition-colors duration-300">
+    <!-- 顶部导航 -->
+    <header class="bg-white shadow-sm sticky top-0 z-50 transition-all duration-300" id="navbar">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa fa-eye text-primary text-2xl"></i>
+                <h1 class="text-xl font-bold text-primary">儿童近视监测</h1>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button id="export-data-btn" class="p-2 rounded-full hover:bg-neutral transition-colors hidden md:flex" title="导出数据">
+                    <i class="fa fa-download text-neutral-dark"></i>
+                </button>
+                <button id="child-management-btn" class="p-2 rounded-full hover:bg-neutral transition-colors" title="儿童管理">
+                    <i class="fa fa-child text-neutral-dark"></i>
+                </button>
+                <button id="theme-toggle" class="p-2 rounded-full hover:bg-neutral transition-colors" title="切换主题">
+                    <i class="fa fa-moon-o text-neutral-dark"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-6">
+        <!-- 儿童选择栏 -->
+        <div class="bg-white rounded-xl p-4 mb-6 card-shadow">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center">
+                    <i class="fa fa-user-circle text-primary mr-2"></i>
+                    <h2 class="text-lg font-medium" id="current-child-name">请选择儿童</h2>
+                </div>
+                <div class="flex gap-3">
+                    <select id="child-selector" class="px-3 py-2 border border-gray-300 rounded-lg input-focus text-sm w-full sm:w-auto">
+                        <option value="">-- 选择儿童 --</option>
+                    </select>
+                    <button id="add-child-btn" class="bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium btn-hover btn-active flex items-center w-full sm:w-auto justify-center">
+                        <i class="fa fa-plus mr-1"></i> 添加儿童
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 设备标准提示 -->
+        <div class="bg-blue-50 border-l-4 border-primary p-4 mb-6 rounded-r-lg">
+            <div class="flex items-start">
+                <i class="fa fa-info-circle text-primary mt-0.5 mr-3"></i>
+                <div>
+                    <h3 class="font-medium text-primary">检测标准说明</h3>
+                    <p class="text-sm text-neutral-dark/80 mt-1">本工具采用行业标准参数，包含角膜曲率半径及轴率比(AL/CR)计算，AL/CR>3.0提示近视高风险。</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <!-- 左侧：数据输入 -->
+            <div class="lg:col-span-1">
+                <div class="bg-white rounded-xl p-6 card-shadow h-full">
+                    <h2 class="text-xl font-bold mb-5 text-primary flex items-center">
+                        <i class="fa fa-pencil-square-o mr-2"></i>输入检测数据
+                    </h2>
+                    
+                    <form id="data-form" class="space-y-5">
+                        <div>
+                            <label for="date" class="block text-sm font-medium mb-1">检测日期</label>
+                            <input type="date" id="date" required
+                                class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                value="2023-06-15">
+                        </div>
+                        
+                        <div>
+                            <label for="age" class="block text-sm font-medium mb-1">儿童年龄（岁）</label>
+                            <div class="relative">
+                                <input type="number" id="age" min="3" max="18" step="0.5" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="例如：7.5">
+                                <div class="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                    <i class="fa fa-calculator text-gray-400"></i>
+                                </div>
+                            </div>
+                            <div class="text-xs text-neutral-dark/60 mt-1">
+                                <i class="fa fa-info-circle mr-1"></i>根据出生日期自动计算
+                            </div>
+                            <div class="error-message" id="age-error">年龄必须在3-18岁之间</div>
+                        </div>
+                        
+                        <!-- 曲率模式 -->
+                        <div>
+                            <label class="block text-sm font-medium mb-1">曲率计算模式</label>
+                            <div class="flex gap-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="curvature-mode" value="without-astigmatism" checked
+                                        class="form-radio text-primary">
+                                    <span class="ml-2 text-sm">不含散光</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="curvature-mode" value="with-astigmatism"
+                                        class="form-radio text-primary">
+                                    <span class="ml-2 text-sm">含散光</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- 眼轴长度 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="axial-left" class="block text-sm font-medium mb-1">左眼轴长度（mm）</label>
+                                <input type="number" id="axial-left" min="18" max="30" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="例如：23.56">
+                                <div class="error-message" id="axial-left-error">请输入18-30之间的数值</div>
+                            </div>
+                            <div>
+                                <label for="axial-right" class="block text-sm font-medium mb-1">右眼轴长度（mm）</label>
+                                <input type="number" id="axial-right" min="18" max="30" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="例如：23.62">
+                                <div class="error-message" id="axial-right-error">请输入18-30之间的数值</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 角膜曲率 K1 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="k1-left" class="block text-sm font-medium mb-1">左眼K1（平K，D）</label>
+                                <input type="number" id="k1-left" min="38" max="48" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="水平方向曲率">
+                                <div class="text-xs text-neutral-dark/60 mt-1">
+                                    计算曲率半径: <span id="r1-left" class="font-medium">-- mm</span>
+                                </div>
+                                <div class="error-message" id="k1-left-error">请输入38-48之间的数值</div>
+                            </div>
+                            <div>
+                                <label for="k1-right" class="block text-sm font-medium mb-1">右眼K1（平K，D）</label>
+                                <input type="number" id="k1-right" min="38" max="48" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="水平方向曲率">
+                                <div class="text-xs text-neutral-dark/60 mt-1">
+                                    计算曲率半径: <span id="r1-right" class="font-medium">-- mm</span>
+                                </div>
+                                <div class="error-message" id="k1-right-error">请输入38-48之间的数值</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 角膜曲率 K2 -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="k2-left" class="block text-sm font-medium mb-1">左眼K2（陡K，D）</label>
+                                <input type="number" id="k2-left" min="38" max="48" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="陡峭方向曲率">
+                                <div class="text-xs text-neutral-dark/60 mt-1">
+                                    计算曲率半径: <span id="r2-left" class="font-medium">-- mm</span>
+                                </div>
+                                <div class="error-message" id="k2-left-error">请输入38-48之间的数值</div>
+                            </div>
+                            <div>
+                                <label for="k2-right" class="block text-sm font-medium mb-1">右眼K2（陡K，D）</label>
+                                <input type="number" id="k2-right" min="38" max="48" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="陡峭方向曲率">
+                                <div class="text-xs text-neutral-dark/60 mt-1">
+                                    计算曲率半径: <span id="r2-right" class="font-medium">-- mm</span>
+                                </div>
+                                <div class="error-message" id="k2-right-error">请输入38-48之间的数值</div>
+                            </div>
+                        </div>
+                        
+                        <!-- 前房深度 ACD -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label for="acd-left" class="block text-sm font-medium mb-1">左眼前房深度（mm）</label>
+                                <input type="number" id="acd-left" min="1.5" max="5.0" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="正常范围: 2.5-3.5">
+                                <div id="acd-left-warning" class="text-warning text-xs mt-1 hidden">
+                                    <i class="fa fa-exclamation-triangle mr-1"></i>前房过深，已修正度数
+                                </div>
+                                <div class="error-message" id="acd-left-error">请输入1.5-5.0之间的数值</div>
+                            </div>
+                            <div>
+                                <label for="acd-right" class="block text-sm font-medium mb-1">右眼前房深度（mm）</label>
+                                <input type="number" id="acd-right" min="1.5" max="5.0" step="0.01" required
+                                    class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                                    placeholder="正常范围: 2.5-3.5">
+                                <div id="acd-right-warning" class="text-warning text-xs mt-1 hidden">
+                                    <i class="fa fa-exclamation-triangle mr-1"></i>前房过深，已修正度数
+                                </div>
+                                <div class="error-message" id="acd-right-error">请输入1.5-5.0之间的数值</div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg font-medium btn-hover btn-active flex items-center justify-center" id="calculate-btn" disabled>
+                            <i class="fa fa-calculator mr-2"></i>计算近视度数
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <!-- 右侧：结果与图表 -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- 检测结果 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h2 class="text-xl font-bold mb-5 text-primary flex items-center">
+                        <i class="fa fa-bar-chart mr-2"></i>检测结果
+                    </h2>
+                    
+                    <div id="result-container" class="opacity-0 transition-all duration-500 transform translate-y-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div class="p-4 border border-gray-100 rounded-lg bg-blue-50 hover:shadow-md transition-all">
+                                <h3 class="font-medium text-primary mb-2 flex items-center">
+                                    <i class="fa fa-eye mr-2"></i>左眼结果
+                                </h3>
+                                <div class="flex items-end space-x-4">
+                                    <div>
+                                        <p class="text-sm text-neutral-dark/70">估算近视度数</p>
+                                        <p id="myopia-left" class="text-3xl font-bold text-danger">-3.25 D</p>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span id="left-status" class="px-2 py-1 text-xs rounded-full bg-danger/10 text-danger">
+                                            中度近视
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 角膜曲率半径和轴率比 -->
+                                <div class="mt-3 space-y-2">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-neutral-dark/70">平均角膜曲率半径:</span>
+                                        <span id="avg-cr-left" class="font-medium">7.85 mm</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-neutral-dark/70">轴率比(AL/CR):</span>
+                                        <span id="alcr-left" class="font-medium text-danger">3.14</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3 pt-3 border-t border-blue-100">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-neutral-dark/70">眼轴年增长预警值:</span>
+                                        <span id="left-axial-warning" class="font-medium text-primary">0.2 mm/年</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="p-4 border border-gray-100 rounded-lg bg-blue-50 hover:shadow-md transition-all">
+                                <h3 class="font-medium text-primary mb-2 flex items-center">
+                                    <i class="fa fa-eye mr-2"></i>右眼结果
+                                </h3>
+                                <div class="flex items-end space-x-4">
+                                    <div>
+                                        <p class="text-sm text-neutral-dark/70">估算近视度数</p>
+                                        <p id="myopia-right" class="text-3xl font-bold text-danger">-3.50 D</p>
+                                    </div>
+                                    <div class="mb-1">
+                                        <span id="right-status" class="px-2 py-1 text-xs rounded-full bg-danger/10 text-danger">
+                                            中度近视
+                                        </span>
+                                    </div>
+                                </div>
+                                
+                                <!-- 角膜曲率半径和轴率比 -->
+                                <div class="mt-3 space-y-2">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-neutral-dark/70">平均角膜曲率半径:</span>
+                                        <span id="avg-cr-right" class="font-medium">7.92 mm</span>
+                                    </div>
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-neutral-dark/70">轴率比(AL/CR):</span>
+                                        <span id="alcr-right" class="font-medium text-warning">2.98</span>
+                                    </div>
+                                </div>
+                                
+                                <div class="mt-3 pt-3 border-t border-blue-100">
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-neutral-dark/70">眼轴年增长预警值:</span>
+                                        <span id="right-axial-warning" class="font-medium text-primary">0.2 mm/年</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 轴率比说明 -->
+                        <div class="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-100">
+                            <h4 class="font-medium text-accent text-sm flex items-center">
+                                <i class="fa fa-stethoscope mr-2"></i>轴率比临床意义
+                            </h4>
+                            <p class="text-xs text-neutral-dark/80 mt-1">
+                                轴率比(AL/CR)是眼轴长度与角膜曲率半径的比值，<span class="font-medium text-danger">AL/CR>3.0提示近视高风险</span>，灵敏度高于单独监测眼轴长度。
+                            </p>
+                        </div>
+                        
+                        <!-- 专家建议 -->
+                        <div class="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-100 hover:shadow-md transition-all">
+                            <h3 class="font-medium text-warning mb-2 flex items-center">
+                                <i class="fa fa-lightbulb-o mr-2"></i>专家建议
+                            </h3>
+                            <p id="advice-text" class="text-sm">
+                                左眼轴率比3.14已超3.0阈值，提示近视高风险。建议减少电子产品使用，每天1小时以上户外活动，每3个月复查，重点关注左眼进展。
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div id="no-data-message" class="py-10 text-center">
+                        <i class="fa fa-file-text-o text-4xl text-gray-300 mb-3"></i>
+                        <p class="text-gray-400">请选择儿童并输入检测数据</p>
+                    </div>
+                    
+                    <div id="no-child-selected" class="py-10 text-center hidden">
+                        <i class="fa fa-user-o text-4xl text-gray-300 mb-3"></i>
+                        <p class="text-gray-400">请先添加并选择一个儿童</p>
+                    </div>
+                </div>
+                
+                <!-- 趋势图表 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <h2 class="text-xl font-bold mb-5 text-primary flex items-center">
+                        <i class="fa fa-line-chart mr-2"></i>眼轴与近视趋势
+                    </h2>
+                    
+                    <div class="mb-4 overflow-x-auto">
+                        <div class="inline-flex bg-gray-100 rounded-lg p-1 min-w-max">
+                            <button class="chart-tab px-4 py-2 rounded-md text-sm font-medium bg-primary text-white" data-chart="axial">
+                                眼轴长度趋势
+                            </button>
+                            <button class="chart-tab px-4 py-2 rounded-md text-sm font-medium text-neutral-dark" data-chart="myopia">
+                                近视度数趋势
+                            </button>
+                            <button class="chart-tab px-4 py-2 rounded-md text-sm font-medium text-neutral-dark" data-chart="alcr">
+                                轴率比趋势
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="h-80 relative">
+                        <canvas id="trend-chart"></canvas>
+                        <div id="chart-placeholder" class="absolute inset-0 flex items-center justify-center hidden">
+                            <div class="text-center">
+                                <i class="fa fa-bar-chart text-4xl text-gray-300 mb-3"></i>
+                                <p class="text-gray-400">暂无数据，添加检测记录后显示</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 text-xs text-neutral-dark/60 bg-gray-50 p-3 rounded-lg">
+                        <p><i class="fa fa-info-circle mr-1"></i> 虚线：眼轴正常上限（左）/ 近视风险阈值（右）</p>
+                    </div>
+                    
+                    <!-- 预测数据 -->
+                    <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="p-4 bg-purple-50 rounded-lg border border-purple-100 hover:shadow-md transition-all">
+                            <h3 class="font-medium text-accent mb-2">左眼预测</h3>
+                            <p class="text-sm">6个月后眼轴: <span id="left-axial-prediction" class="font-medium">23.86 mm</span></p>
+                            <p class="text-sm">1年后眼轴: <span id="left-axial-prediction-1y" class="font-medium">24.12 mm</span></p>
+                            <p class="text-sm mt-2">6个月后度数: <span id="left-myopia-prediction" class="font-medium">-3.75 D</span></p>
+                            <p class="text-sm">1年后度数: <span id="left-myopia-prediction-1y" class="font-medium">-4.25 D</span></p>
+                            <p class="text-sm mt-2">1年后轴率比: <span id="left-alcr-prediction-1y" class="font-medium text-danger">3.25</span></p>
+                        </div>
+                        
+                        <div class="p-4 bg-purple-50 rounded-lg border border-purple-100 hover:shadow-md transition-all">
+                            <h3 class="font-medium text-accent mb-2">右眼预测</h3>
+                            <p class="text-sm">6个月后眼轴: <span id="right-axial-prediction" class="font-medium">23.92 mm</span></p>
+                            <p class="text-sm">1年后眼轴: <span id="right-axial-prediction-1y" class="font-medium">24.18 mm</span></p>
+                            <p class="text-sm mt-2">6个月后度数: <span id="right-myopia-prediction" class="font-medium">-4.00 D</span></p>
+                            <p class="text-sm">1年后度数: <span id="right-myopia-prediction-1y" class="font-medium">-4.50 D</span></p>
+                            <p class="text-sm mt-2">1年后轴率比: <span id="right-alcr-prediction-1y" class="font-medium text-danger">3.05</span></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 历史记录 -->
+                <div class="bg-white rounded-xl p-6 card-shadow">
+                    <div class="flex justify-between items-center mb-5">
+                        <h2 class="text-xl font-bold text-primary flex items-center">
+                            <i class="fa fa-history mr-2"></i>历史记录
+                        </h2>
+                        <div class="flex gap-2">
+                            <button id="export-history-btn" class="text-sm text-primary hover:text-primary/80 transition-colors hidden md:flex items-center" disabled>
+                                <i class="fa fa-download mr-1"></i>导出记录
+                            </button>
+                            <button id="clear-history" class="text-sm text-neutral-dark/60 hover:text-danger transition-colors" disabled>
+                                <i class="fa fa-trash-o mr-1"></i>清除记录
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full">
+                            <thead>
+                                <tr class="border-b border-gray-200">
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">日期</th>
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">左眼轴(mm)</th>
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">右眼轴(mm)</th>
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">左眼度数(D)</th>
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">右眼度数(D)</th>
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">左眼AL/CR</th>
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">右眼AL/CR</th>
+                                    <th class="py-3 text-left text-xs font-medium text-neutral-dark/60 uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table" class="divide-y divide-gray-200">
+                                <tr class="text-center">
+                                    <td colspan="8" class="py-8 text-gray-400">请先添加并选择一个儿童</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <footer class="bg-white border-t border-gray-200 mt-12">
+        <div class="container mx-auto px-4 py-6">
+            <div class="text-center text-sm text-neutral-dark/60">
+                <p>儿童近视监测助手 &copy; 2025</p>
+                <p class="mt-1">数据仅供参考，不能替代专业医疗建议，请咨询眼科医生</p>
+            </div>
+        </div>
+    </footer>
+
+    <!-- 添加儿童模态框 -->
+    <div id="add-child-modal" class="fixed inset-0 bg-black/50 modal-backdrop flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 transform scale-95 transition-transform duration-300 opacity-0" id="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-primary">添加儿童信息</h3>
+                <button id="close-modal" class="text-neutral-dark/60 hover:text-danger transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="child-form" class="space-y-4">
+                <div>
+                    <label for="child-name" class="block text-sm font-medium mb-1">姓名 <span class="text-danger">*</span></label>
+                    <input type="text" id="child-name" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                        placeholder="请输入儿童姓名">
+                    <div class="error-message" id="name-error">请输入2-10个字符的姓名（不含特殊符号）</div>
+                </div>
+                
+                <div>
+                    <label for="child-gender" class="block text-sm font-medium mb-1">性别 <span class="text-danger">*</span></label>
+                    <select id="child-gender" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus">
+                        <option value="">-- 请选择 --</option>
+                        <option value="male">男</option>
+                        <option value="female">女</option>
+                    </select>
+                    <div class="error-message" id="gender-error">请选择性别</div>
+                </div>
+                
+                <div>
+                    <label for="child-birthday" class="block text-sm font-medium mb-1">出生日期 <span class="text-danger">*</span></label>
+                    <input type="date" id="child-birthday" required
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus">
+                    <div class="error-message" id="birthday-error">请选择3-18岁之间的出生日期</div>
+                </div>
+                
+                <div>
+                    <label for="child-notes" class="block text-sm font-medium mb-1">备注（可选）</label>
+                    <textarea id="child-notes" rows="2"
+                        class="w-full px-4 py-2 border border-gray-300 rounded-lg input-focus"
+                        placeholder="特殊信息"></textarea>
+                </div>
+                
+                <button type="submit" class="w-full bg-primary text-white py-3 rounded-lg font-medium btn-hover btn-active">
+                    保存儿童信息
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- 儿童管理模态框 -->
+    <div id="child-management-modal" class="fixed inset-0 bg-black/50 modal-backdrop flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 transform scale-95 transition-transform duration-300 opacity-0" id="management-modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-primary">儿童管理</h3>
+                <button id="close-management-modal" class="text-neutral-dark/60 hover:text-danger transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <div id="children-list" class="space-y-3 max-h-72 overflow-y-auto pr-2 mb-4">
+                <div class="text-center py-8 text-gray-400">
+                    暂无儿童信息，请添加
+                </div>
+            </div>
+            
+            <button id="add-child-from-management" class="w-full bg-primary text-white py-3 rounded-lg font-medium btn-hover btn-active">
+                <i class="fa fa-plus mr-1"></i> 添加新儿童
+            </button>
+        </div>
+    </div>
+
+    <!-- 通知提示框 -->
+    <div id="notification" class="fixed bottom-5 right-5 p-4 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 max-w-xs">
+        <div class="flex items-center">
+            <i id="notification-icon" class="fa fa-check-circle mr-2"></i>
+            <span id="notification-text">操作成功</span>
+        </div>
+    </div>
+
+    <!-- 数据导出模态框 -->
+    <div id="export-modal" class="fixed inset-0 bg-black/50 modal-backdrop flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-xl p-6 w-full max-w-md mx-4 transform scale-95 transition-transform duration-300 opacity-0" id="export-modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-bold text-primary">导出数据</h3>
+                <button id="close-export-modal" class="text-neutral-dark/60 hover:text-danger transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2">导出范围</label>
+                    <div class="space-y-3">
+                        <label class="flex items-start">
+                            <input type="radio" name="export-scope" value="current" checked
+                                class="form-radio text-primary mt-1">
+                            <span class="ml-2 text-sm">当前儿童的所有检测记录</span>
+                        </label>
+                        <label class="flex items-start">
+                            <input type="radio" name="export-scope" value="all"
+                                class="form-radio text-primary mt-1">
+                            <span class="ml-2 text-sm">所有儿童的信息和检测记录</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium mb-2">导出格式</label>
+                    <div class="space-y-3">
+                        <label class="flex items-start">
+                            <input type="radio" name="export-format" value="csv" checked
+                                class="form-radio text-primary mt-1">
+                            <span class="ml-2 text-sm">CSV (Excel可打开)</span>
+                        </label>
+                        <label class="flex items-start">
+                            <input type="radio" name="export-format" value="json"
+                                class="form-radio text-primary mt-1">
+                            <span class="ml-2 text-sm">JSON (数据交换格式)</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="bg-blue-50 p-3 rounded-lg text-sm">
+                    <i class="fa fa-info-circle text-primary mr-1"></i>
+                    导出包含眼轴、曲率、前房深度、轴率比等所有参数。
+                </div>
+                
+                <button id="do-export-btn" class="w-full bg-primary text-white py-3 rounded-lg font-medium btn-hover btn-active">
+                    <i class="fa fa-download mr-1"></i> 导出数据
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let children = JSON.parse(localStorage.getItem('myopiaChildren')) || [];
+        let currentChildId = localStorage.getItem('currentChildId') || null;
+        let trendChart = null;
+        let currentChartType = 'axial'; // 默认眼轴趋势图
+        
+        // 眼轴年增长参考值（mm/年）
+        const axialGrowthRates = [
+            { minAge: 3, maxAge: 6, rate: 0.3 },
+            { minAge: 6, maxAge: 9, rate: 0.2 },
+            { minAge: 9, maxAge: 12, rate: 0.2 },
+            { minAge: 12, maxAge: 18, rate: 0.15 },
+            { minAge: 18, maxAge: 150, rate: 0.05 }
+        ];
+        
+        // 角膜折射率
+        const CORNEAL_REFRACTIVE_INDEX = 1.3375;
+
+        // DOM加载完成初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            setupEventListeners();
+            initChildSelector();
+            initFormValidation();
+            initChart();
+            initThemeToggle();
+            initScrollEffects();
+            
+            // 检查本地存储
+            if (!isLocalStorageAvailable()) {
+                showNotification('浏览器不支持本地存储，功能可能受限', 'error');
+            }
+            
+            // 加载当前儿童
+            if (currentChildId) {
+                loadChildData(currentChildId);
+            } else {
+                updateUIForNoChild();
+            }
+        });
+
+        // 设置所有事件监听器
+        function setupEventListeners() {
+            // 添加儿童按钮
+            document.getElementById('add-child-btn').addEventListener('click', openAddChildModal);
+            document.getElementById('add-child-from-management').addEventListener('click', () => {
+                closeChildManagementModal();
+                openAddChildModal();
+            });
+            
+            // 儿童管理按钮
+            document.getElementById('child-management-btn').addEventListener('click', openChildManagementModal);
+            
+            // 关闭模态框按钮
+            document.getElementById('close-modal').addEventListener('click', closeAddChildModal);
+            document.getElementById('close-management-modal').addEventListener('click', closeChildManagementModal);
+            document.getElementById('close-export-modal').addEventListener('click', closeExportModal);
+            
+            // 儿童表单提交
+            document.getElementById('child-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                saveChildInfo();
+            });
+            
+            // 数据表单提交
+            document.getElementById('data-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                calculateMyopia();
+            });
+            
+            // 儿童选择器变化
+            document.getElementById('child-selector').addEventListener('change', function() {
+                const childId = this.value;
+                if (childId) {
+                    currentChildId = childId;
+                    localStorage.setItem('currentChildId', childId);
+                    loadChildData(childId);
+                } else {
+                    updateUIForNoChild();
+                }
+            });
+            
+            // 曲率输入变化 - 实时计算曲率半径
+            document.getElementById('k1-left').addEventListener('input', function() {
+                calculateCurvatureRadius(this.value, 'r1-left');
+            });
+            document.getElementById('k1-right').addEventListener('input', function() {
+                calculateCurvatureRadius(this.value, 'r1-right');
+            });
+            document.getElementById('k2-left').addEventListener('input', function() {
+                calculateCurvatureRadius(this.value, 'r2-left');
+            });
+            document.getElementById('k2-right').addEventListener('input', function() {
+                calculateCurvatureRadius(this.value, 'r2-right');
+            });
+            
+            // 前房深度输入变化
+            document.getElementById('acd-left').addEventListener('input', function() {
+                const val = parseFloat(this.value);
+                document.getElementById('acd-left-warning').classList.toggle('hidden', val <= 3.5 || isNaN(val));
+            });
+            document.getElementById('acd-right').addEventListener('input', function() {
+                const val = parseFloat(this.value);
+                document.getElementById('acd-right-warning').classList.toggle('hidden', val <= 3.5 || isNaN(val));
+            });
+            
+            // 图表切换
+            document.querySelectorAll('.chart-tab').forEach(tab => {
+                tab.addEventListener('click', function() {
+                    document.querySelectorAll('.chart-tab').forEach(t => {
+                        t.classList.remove('bg-primary', 'text-white');
+                        t.classList.add('text-neutral-dark');
+                    });
+                    this.classList.remove('text-neutral-dark');
+                    this.classList.add('bg-primary', 'text-white');
+                    
+                    currentChartType = this.dataset.chart;
+                    const child = getChildById(currentChildId);
+                    if (child && child.records) {
+                        updateChart(child.records);
+                    }
+                });
+            });
+            
+            // 导出数据按钮
+            document.getElementById('export-data-btn').addEventListener('click', openExportModal);
+            document.getElementById('export-history-btn').addEventListener('click', openExportModal);
+            document.getElementById('do-export-btn').addEventListener('click', exportData);
+            
+            // 清除历史记录
+            document.getElementById('clear-history').addEventListener('click', function() {
+                if (!confirm('确定要清除所有检测记录吗？此操作不可恢复。')) return;
+                
+                const child = getChildById(currentChildId);
+                if (child) {
+                    child.records = [];
+                    localStorage.setItem('myopiaChildren', JSON.stringify(children));
+                    updateHistoryTable([]);
+                    updateChart([]);
+                    document.getElementById('result-container').classList.add('opacity-0', 'translate-y-4');
+                    document.getElementById('no-data-message').classList.remove('hidden');
+                    showNotification('已清除所有检测记录', 'success');
+                }
+            });
+        }
+
+        // 打开添加儿童模态框
+        function openAddChildModal() {
+            const modal = document.getElementById('add-child-modal');
+            const modalContent = document.getElementById('modal-content');
+            if (!modal || !modalContent) return;
+            
+            // 重置表单
+            const form = document.getElementById('child-form');
+            if (form) {
+                form.reset();
+                // 默认出生日期：10年前
+                const defaultBirthday = new Date();
+                defaultBirthday.setFullYear(defaultBirthday.getFullYear() - 10);
+                document.getElementById('child-birthday').valueAsDate = defaultBirthday;
+            }
+            
+            // 清除错误提示
+            document.querySelectorAll('.form-error').forEach(el => el.classList.remove('form-error'));
+            document.querySelectorAll('.error-message').forEach(el => el.classList.add('hidden'));
+            
+            // 显示模态框
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                modalContent.classList.remove('scale-95', 'opacity-0');
+                modalContent.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        // 关闭添加儿童模态框
+        function closeAddChildModal() {
+            const modal = document.getElementById('add-child-modal');
+            const modalContent = document.getElementById('modal-content');
+            if (!modal || !modalContent) return;
+            
+            modalContent.classList.remove('scale-100', 'opacity-100');
+            modalContent.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 打开/关闭其他模态框
+        function openChildManagementModal() {
+            const modal = document.getElementById('child-management-modal');
+            const content = document.getElementById('management-modal-content');
+            if (!modal || !content) return;
+            
+            updateChildrenManagementList();
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeChildManagementModal() {
+            const modal = document.getElementById('child-management-modal');
+            const content = document.getElementById('management-modal-content');
+            if (!modal || !content) return;
+            
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function openExportModal() {
+            const modal = document.getElementById('export-modal');
+            const content = document.getElementById('export-modal-content');
+            if (!modal || !content) return;
+            
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                content.classList.remove('scale-95', 'opacity-0');
+                content.classList.add('scale-100', 'opacity-100');
+            }, 10);
+        }
+
+        function closeExportModal() {
+            const modal = document.getElementById('export-modal');
+            const content = document.getElementById('export-modal-content');
+            if (!modal || !content) return;
+            
+            content.classList.remove('scale-100', 'opacity-100');
+            content.classList.add('scale-95', 'opacity-0');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        // 计算角膜曲率半径
+        function calculateCurvatureRadius(power, resultElementId) {
+            const el = document.getElementById(resultElementId);
+            const f = parseFloat(power);
+            if (isNaN(f) || f <= 0) {
+                el.textContent = '-- mm';
+                return null;
+            }
+            // 公式：R=(1.3375-1)/F * 1000（转换为mm）
+            const r = (CORNEAL_REFRACTIVE_INDEX - 1) / f * 1000;
+            el.textContent = r.toFixed(2) + ' mm';
+            return r;
+        }
+
+        // 计算轴率比（AL/CR）
+        function calculateALCR(axialLength, k1, k2) {
+            const avgK = (k1 + k2) / 2;
+            const alcr = (axialLength * avgK) / 337.5;
+            return parseFloat(alcr.toFixed(2));
+        }
+
+        // 计算近视度数
+        function calculateMyopia() {
+            if (!validateForm()) return;
+            
+            // 获取表单数据
+            const date = document.getElementById('date').value;
+            const age = parseFloat(document.getElementById('age').value);
+            const axialLeft = parseFloat(document.getElementById('axial-left').value);
+            const axialRight = parseFloat(document.getElementById('axial-right').value);
+            const k1Left = parseFloat(document.getElementById('k1-left').value);
+            const k1Right = parseFloat(document.getElementById('k1-right').value);
+            const k2Left = parseFloat(document.getElementById('k2-left').value);
+            const k2Right = parseFloat(document.getElementById('k2-right').value);
+            const acdLeft = parseFloat(document.getElementById('acd-left').value);
+            const acdRight = parseFloat(document.getElementById('acd-right').value);
+            const curvatureMode = document.querySelector('input[name="curvature-mode"]:checked').value;
+            
+            // 计算关键参数
+            const avgKLeft = (k1Left + k2Left) / 2;
+            const avgKRight = (k1Right + k2Right) / 2;
+            const avgCRLeft = (calculateCurvatureRadius(k1Left, 'r1-left') + calculateCurvatureRadius(k2Left, 'r2-left')) / 2;
+            const avgCRRight = (calculateCurvatureRadius(k1Right, 'r1-right') + calculateCurvatureRadius(k2Right, 'r2-right')) / 2;
+            const alcrLeft = calculateALCR(axialLeft, k1Left, k2Left);
+            const alcrRight = calculateALCR(axialRight, k1Right, k2Right);
+            
+            // 计算近视度数（SE = -3.00×(AL-23.5) + 0.50×(43.0-K)）
+            let myopiaLeft = -3.00 * (axialLeft - 23.5) + 0.50 * (43.0 - avgKLeft);
+            let myopiaRight = -3.00 * (axialRight - 23.5) + 0.50 * (43.0 - avgKRight);
+            
+            // 前房深度修正（ACD>3.5mm时，每超0.1mm修正0.1D）
+            if (acdLeft > 3.5) myopiaLeft -= (acdLeft - 3.5) * 1.0;
+            if (acdRight > 3.5) myopiaRight -= (acdRight - 3.5) * 1.0;
+            
+            // 四舍五入到0.25D
+            myopiaLeft = Math.round(myopiaLeft * 4) / 4;
+            myopiaRight = Math.round(myopiaRight * 4) / 4;
+            
+            // 更新结果显示
+            updateResultDisplay({
+                myopiaLeft, myopiaRight, alcrLeft, alcrRight,
+                avgCRLeft, avgCRRight, age
+            });
+            
+            // 保存记录
+            saveRecord({
+                id: Date.now().toString(),
+                date, age, axialLeft, axialRight,
+                k1Left, k1Right, k2Left, k2Right,
+                acdLeft, acdRight, curvatureMode,
+                myopiaLeft, myopiaRight, alcrLeft, alcrRight
+            });
+        }
+
+        // 更新结果显示
+        function updateResultDisplay(data) {
+            const { myopiaLeft, myopiaRight, alcrLeft, alcrRight, avgCRLeft, avgCRRight, age } = data;
+            
+            // 近视状态判断
+            const getStatus = (val) => {
+                if (val >= -0.5) return { text: '正常', cls: 'bg-success/10 text-success' };
+                if (val > -3.0) return { text: '轻度近视', cls: 'bg-warning/10 text-warning' };
+                if (val > -6.0) return { text: '中度近视', cls: 'bg-orange-100 text-orange-600' };
+                return { text: '高度近视', cls: 'bg-danger/10 text-danger' };
+            };
+            
+            const leftStatus = getStatus(myopiaLeft);
+            const rightStatus = getStatus(myopiaRight);
+            
+            // 眼轴年增长预警值
+            const growthRate = getAxialGrowthRate(age);
+            
+            // 更新DOM
+            document.getElementById('myopia-left').textContent = myopiaLeft.toFixed(2) + ' D';
+            document.getElementById('myopia-right').textContent = myopiaRight.toFixed(2) + ' D';
+            document.getElementById('left-status').textContent = leftStatus.text;
+            document.getElementById('left-status').className = `px-2 py-1 text-xs rounded-full ${leftStatus.cls}`;
+            document.getElementById('right-status').textContent = rightStatus.text;
+            document.getElementById('right-status').className = `px-2 py-1 text-xs rounded-full ${rightStatus.cls}`;
+            
+            document.getElementById('avg-cr-left').textContent = avgCRLeft.toFixed(2) + ' mm';
+            document.getElementById('avg-cr-right').textContent = avgCRRight.toFixed(2) + ' mm';
+            document.getElementById('alcr-left').textContent = alcrLeft.toFixed(2);
+            document.getElementById('alcr-right').textContent = alcrRight.toFixed(2);
+            document.getElementById('alcr-left').className = `font-medium ${alcrLeft > 3.0 ? 'text-danger' : alcrLeft > 2.9 ? 'text-warning' : ''}`;
+            document.getElementById('alcr-right').className = `font-medium ${alcrRight > 3.0 ? 'text-danger' : alcrRight > 2.9 ? 'text-warning' : ''}`;
+            
+            document.getElementById('left-axial-warning').textContent = growthRate + ' mm/年';
+            document.getElementById('right-axial-warning').textContent = growthRate + ' mm/年';
+            
+            // 专家建议
+            updateAdviceText(alcrLeft, alcrRight);
+            
+            // 预测数据
+            updatePredictionData(age, axialLeft, axialRight, k1Left, k1Right, k2Left, k2Right, myopiaLeft, myopiaRight);
+            
+            // 显示结果区域
+            document.getElementById('result-container').classList.remove('opacity-0', 'translate-y-4');
+            document.getElementById('no-data-message').classList.add('hidden');
+        }
+
+        // 更新专家建议
+        function updateAdviceText(alcrLeft, alcrRight) {
+            let advice = '';
+            if (alcrLeft > 3.0 || alcrRight > 3.0) {
+                advice += '轴率比超过3.0阈值，提示近视高风险。';
+            } else if (alcrLeft > 2.9 || alcrRight > 2.9) {
+                advice += '轴率比接近3.0阈值，近视风险增加。';
+            } else {
+                advice += '轴率比正常，近视风险较低。';
+            }
+            
+            advice += ' 建议减少电子产品使用，每天1小时以上户外活动，';
+            advice += (alcrLeft > 3.0 || alcrRight > 3.0) ? '每3个月复查。' : '每6个月复查。';
+            
+            if (alcrLeft > 3.0) advice += ' 重点关注左眼进展。';
+            if (alcrRight > 3.0) advice += ' 重点关注右眼进展。';
+            
+            document.getElementById('advice-text').textContent = advice;
+        }
+
+        // 更新预测数据
+        function updatePredictionData(age, axialLeft, axialRight, k1Left, k1Right, k2Left, k2Right, myopiaLeft, myopiaRight) {
+            const child = getChildById(currentChildId);
+            let leftGrowth = getAxialGrowthRate(age);
+            let rightGrowth = getAxialGrowthRate(age);
+            
+            // 有历史记录则用实际增长率
+            if (child?.records?.length >= 2) {
+                const first = child.records[0];
+                const last = child.records[child.records.length - 1];
+                const days = (new Date(last.date) - new Date(first.date)) / (1000 * 60 * 60 * 24);
+                const years = days / 365.25;
+                if (years > 0) {
+                    leftGrowth = (last.axialLeft - first.axialLeft) / years;
+                    rightGrowth = (last.axialRight - first.axialRight) / years;
+                }
+            }
+            
+            // 6个月/1年后预测
+            const leftAx6m = axialLeft + leftGrowth * 0.5;
+            const leftAx1y = axialLeft + leftGrowth;
+            const rightAx6m = axialRight + rightGrowth * 0.5;
+            const rightAx1y = axialRight + rightGrowth;
+            
+            // 度数预测（眼轴每增1mm，度数增-2.50D）
+            const leftMy6m = myopiaLeft + (leftAx6m - axialLeft) * -2.50;
+            const leftMy1y = myopiaLeft + (leftAx1y - axialLeft) * -2.50;
+            const rightMy6m = myopiaRight + (rightAx6m - axialRight) * -2.50;
+            const rightMy1y = myopiaRight + (rightAx1y - axialRight) * -2.50;
+            
+            // 轴率比预测
+            const leftAlcr1y = calculateALCR(leftAx1y, k1Left, k2Left);
+            const rightAlcr1y = calculateALCR(rightAx1y, k1Right, k2Right);
+            
+            // 更新DOM
+            document.getElementById('left-axial-prediction').textContent = leftAx6m.toFixed(2) + ' mm';
+            document.getElementById('left-axial-prediction-1y').textContent = leftAx1y.toFixed(2) + ' mm';
+            document.getElementById('right-axial-prediction').textContent = rightAx6m.toFixed(2) + ' mm';
+            document.getElementById('right-axial-prediction-1y').textContent = rightAx1y.toFixed(2) + ' mm';
+            
+            document.getElementById('left-myopia-prediction').textContent = Math.round(leftMy6m * 4) / 4 + ' D';
+            document.getElementById('left-myopia-prediction-1y').textContent = Math.round(leftMy1y * 4) / 4 + ' D';
+            document.getElementById('right-myopia-prediction').textContent = Math.round(rightMy6m * 4) / 4 + ' D';
+            document.getElementById('right-myopia-prediction-1y').textContent = Math.round(rightMy1y * 4) / 4 + ' D';
+            
+            document.getElementById('left-alcr-prediction-1y').textContent = leftAlcr1y.toFixed(2);
+            document.getElementById('left-alcr-prediction-1y').className = `font-medium ${leftAlcr1y > 3.0 ? 'text-danger' : leftAlcr1y > 2.9 ? 'text-warning' : ''}`;
+            document.getElementById('right-alcr-prediction-1y').textContent = rightAlcr1y.toFixed(2);
+            document.getElementById('right-alcr-prediction-1y').className = `font-medium ${rightAlcr1y > 3.0 ? 'text-danger' : rightAlcr1y > 2.9 ? 'text-warning' : ''}`;
+        }
+
+        // 初始化图表
+        function initChart() {
+            const ctx = document.getElementById('trend-chart').getContext('2d');
+            if (trendChart) trendChart.destroy();
+            
+            trendChart = new Chart(ctx, {
+                type: 'line',
+                data: { labels: [], datasets: [] },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => {
+                                    let label = ctx.dataset.label || '';
+                                    if (label) label += ': ';
+                                    if (ctx.parsed.y !== null) {
+                                        if (currentChartType === 'axial') label += ctx.parsed.y.toFixed(2) + ' mm';
+                                        else if (currentChartType === 'myopia') label += ctx.parsed.y.toFixed(2) + ' D';
+                                        else label += ctx.parsed.y.toFixed(2);
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        annotation: { annotations: {} }
+                    },
+                    scales: {
+                        x: { title: { display: true, text: '检测日期' } },
+                        y: { title: { display: true, text: getChartYTitle() } }
+                    }
+                }
+            });
+            
+            document.getElementById('chart-placeholder').classList.remove('hidden');
+        }
+
+        // 获取图表Y轴标题
+        function getChartYTitle() {
+            if (currentChartType === 'axial') return '眼轴长度 (mm)';
+            if (currentChartType === 'myopia') return '近视度数 (D)';
+            return '轴率比 (AL/CR)';
+        }
+
+        // 更新图表数据
+        function updateChart(records) {
+            initChart();
+            if (!records || records.length === 0) {
+                document.getElementById('chart-placeholder').classList.remove('hidden');
+                return;
+            }
+            
+            document.getElementById('chart-placeholder').classList.add('hidden');
+            const sorted = [...records].sort((a, b) => new Date(a.date) - new Date(b.date));
+            const labels = sorted.map(r => {
+                const d = new Date(r.date);
+                return `${d.getMonth() + 1}/${d.getDate()}`;
+            });
+            
+            let datasets = [];
+            let annotations = {};
+            
+            // 眼轴图表
+            if (currentChartType === 'axial') {
+                const age = sorted[sorted.length - 1].age;
+                const normalMax = getNormalAxialMax(age);
+                annotations = {
+                    line1: {
+                        type: 'line',
+                        yMin: normalMax, yMax: normalMax,
+                        borderColor: 'rgb(255, 99, 132)',
+                        borderWidth: 2, borderDash: [5, 5],
+                        label: { display: true, content: '正常范围上限', position: 'end' }
+                    }
+                };
+                
+                datasets = [
+                    {
+                        label: '左眼轴长度',
+                        data: sorted.map(r => r.axialLeft),
+                        borderColor: '#165DFF',
+                        backgroundColor: 'rgba(22, 93, 255, 0.1)',
+                        tension: 0.3, fill: false,
+                        pointRadius: 4, pointBackgroundColor: '#165DFF'
+                    },
+                    {
+                        label: '右眼轴长度',
+                        data: sorted.map(r => r.axialRight),
+                        borderColor: '#36CFC9',
+                        backgroundColor: 'rgba(54, 207, 201, 0.1)',
+                        tension: 0.3, fill: false,
+                        pointRadius: 4, pointBackgroundColor: '#36CFC9'
+                    }
+                ];
+            }
+            
+            // 近视度数图表
+            else if (currentChartType === 'myopia') {
+                annotations = {
+                    line1: { // 正常视力界限
+                        type: 'line', yMin: -0.5, yMax: -0.5,
+                        borderColor: 'rgb(0, 180, 42)',
+                        borderWidth: 2, borderDash: [5, 5],
+                        label: { display: true, content: '正常视力界限', position: 'end' }
+                    },
+                    line2: { // 轻度近视界限
+                        type: 'line', yMin: -3.0, yMax: -3.0,
+                        borderColor: 'rgb(255, 125, 0)',
+                        borderWidth: 2, borderDash: [5, 5],
+                        label: { display: true, content: '轻度近视界限', position: 'end' }
+                    },
+                    line3: { // 中度近视界限
+                        type: 'line', yMin: -6.0, yMax: -6.0,
+                        borderColor: 'rgb(245, 63, 63)',
+                        borderWidth: 2, borderDash: [5, 5],
+                        label: { display: true, content: '中度近视界限', position: 'end' }
+                    }
+                };
+                
+                datasets = [
+                    {
+                        label: '左眼近视度数',
+                        data: sorted.map(r => r.myopiaLeft),
+                        borderColor: '#165DFF',
+                        backgroundColor: 'rgba(22, 93, 255, 0.1)',
+                        tension: 0.3, fill: false,
+                        pointRadius: 4, pointBackgroundColor: '#165DFF'
+                    },
+                    {
+                        label: '右眼近视度数',
+                        data: sorted.map(r => r.myopiaRight),
+                        borderColor: '#36CFC9',
+                        backgroundColor: 'rgba(54, 207, 201, 0.1)',
+                        tension: 0.3, fill: false,
+                        pointRadius: 4, pointBackgroundColor: '#36CFC9'
+                    }
+                ];
+            }
+            
+            // 轴率比图表
+            else {
+                annotations = {
+                    line1: { // 近视高风险阈值
+                        type: 'line', yMin: 3.0, yMax: 3.0,
+                        borderColor: 'rgb(245, 63, 63)',
+                        borderWidth: 2, borderDash: [5, 5],
+                        label: { display: true, content: '近视高风险阈值', position: 'end' }
+                    }
+                };
+                
+                datasets = [
+                    {
+                        label: '左眼轴率比',
+                        data: sorted.map(r => r.alcrLeft),
+                        borderColor: '#165DFF',
+                        backgroundColor: 'rgba(22, 93, 255, 0.1)',
+                        tension: 0.3, fill: false,
+                        pointRadius: 4, pointBackgroundColor: '#165DFF'
+                    },
+                    {
+                        label: '右眼轴率比',
+                        data: sorted.map(r => r.alcrRight),
+                        borderColor: '#36CFC9',
+                        backgroundColor: 'rgba(54, 207, 201, 0.1)',
+                        tension: 0.3, fill: false,
+                        pointRadius: 4, pointBackgroundColor: '#36CFC9'
+                    }
+                ];
+            }
+            
+            // 更新图表
+            trendChart.data.labels = labels;
+            trendChart.data.datasets = datasets;
+            trendChart.options.plugins.annotation.annotations = annotations;
+            trendChart.options.scales.y.title.text = getChartYTitle();
+            trendChart.update();
+        }
+
+        // 获取眼轴正常范围上限
+        function getNormalAxialMax(age) {
+            if (age >= 3 && age < 6) return 21.5;
+            if (age >= 6 && age < 9) return 22.5;
+            if (age >= 9 && age < 12) return 23.0;
+            return 23.5; // 12-18岁
+        }
+
+        // 保存儿童信息
+        function saveChildInfo() {
+            const name = document.getElementById('child-name').value.trim();
+            const gender = document.getElementById('child-gender').value;
+            const birthday = document.getElementById('child-birthday').value;
+            const notes = document.getElementById('child-notes').value.trim();
+            
+            // 验证
+            let valid = true;
+            if (name.length < 2 || name.length > 10 || !/^[\u4e00-\u9fa5a-zA-Z0-9]+$/.test(name)) {
+                markFieldInvalid('child-name', 'name-error', '请输入2-10个字符（不含特殊符号）');
+                valid = false;
+            }
+            if (!gender) {
+                markFieldInvalid('child-gender', 'gender-error', '请选择性别');
+                valid = false;
+            }
+            if (!birthday) {
+                markFieldInvalid('child-birthday', 'birthday-error', '请选择出生日期');
+                valid = false;
+            } else {
+                const birth = new Date(birthday);
+                const today = new Date();
+                let age = today.getFullYear() - birth.getFullYear();
+                if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
+                    age--;
+                }
+                if (age < 3 || age > 18) {
+                    markFieldInvalid('child-birthday', 'birthday-error', `年龄需3-18岁（当前${age}岁）`);
+                    valid = false;
+                }
+            }
+            
+            if (!valid) {
+                const firstErr = document.querySelector('.form-error');
+                firstErr?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstErr?.focus();
+                return;
+            }
+            
+            // 保存
+            const newChild = {
+                id: Date.now().toString(),
+                name, gender, birthday, notes,
+                records: []
+            };
+            
+            children.push(newChild);
+            localStorage.setItem('myopiaChildren', JSON.stringify(children));
+            initChildSelector();
+            currentChildId = newChild.id;
+            localStorage.setItem('currentChildId', newChild.id);
+            loadChildData(newChild.id);
+            closeAddChildModal();
+            showNotification(`已添加儿童：${name}`, 'success');
+        }
+
+        // 加载儿童数据
+        function loadChildData(childId) {
+            const child = getChildById(childId);
+            if (!child) {
+                showNotification('未找到该儿童', 'error');
+                return;
+            }
+            
+            document.getElementById('current-child-name').textContent = child.name;
+            document.getElementById('calculate-btn').disabled = false;
+            document.getElementById('export-history-btn').disabled = false;
+            document.getElementById('clear-history').disabled = false;
+            
+            updateHistoryTable(child.records);
+            updateChart(child.records);
+            
+            // 计算当前年龄并填充
+            const birth = new Date(child.birthday);
+            const today = new Date();
+            let age = today.getFullYear() - birth.getFullYear();
+            if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
+                age--;
+            }
+            document.getElementById('age').value = age.toFixed(1);
+            
+            if (child.records.length > 0) {
+                const last = child.records[child.records.length - 1];
+                populateFormWithRecord(last);
+                document.getElementById('result-container').classList.remove('opacity-0', 'translate-y-4');
+                document.getElementById('no-data-message').classList.add('hidden');
+            } else {
+                document.getElementById('data-form').reset();
+                const today = new Date();
+                document.getElementById('date').value = today.toISOString().split('T')[0];
+                document.getElementById('age').value = age.toFixed(1);
+                document.getElementById('result-container').classList.add('opacity-0', 'translate-y-4');
+                document.getElementById('no-data-message').classList.remove('hidden');
+            }
+            
+            // 隐藏无儿童提示
+            document.getElementById('no-child-selected').classList.add('hidden');
+        }
+
+        // 保存检测记录
+        function saveRecord(record) {
+            const child = getChildById(currentChildId);
+            if (!child) return;
+            
+            if (!child.records) child.records = [];
+            const existingIdx = child.records.findIndex(r => r.date === record.date);
+            
+            if (existingIdx >= 0) {
+                child.records[existingIdx] = record;
+                showNotification('已更新今日记录', 'success');
+            } else {
+                child.records.push(record);
+                showNotification('已保存检测记录', 'success');
+            }
+            
+            // 按日期排序
+            child.records.sort((a, b) => new Date(a.date) - new Date(b.date));
+            
+            // 保存到本地存储
+            localStorage.setItem('myopiaChildren', JSON.stringify(children));
+            
+            // 更新UI
+            updateHistoryTable(child.records);
+            updateChart(child.records);
+        }
+
+        // 初始化儿童选择器
+        function initChildSelector() {
+            const selector = document.getElementById('child-selector');
+            if (!selector) return;
+            
+            // 保存当前选中值
+            const currentValue = selector.value;
+            
+            // 清空选择器
+            selector.innerHTML = '<option value="">-- 选择儿童 --</option>';
+            
+            // 添加所有儿童
+            children.forEach(child => {
+                const option = document.createElement('option');
+                option.value = child.id;
+                option.textContent = child.name;
+                
+                // 计算年龄
+                const birth = new Date(child.birthday);
+                const today = new Date();
+                let age = today.getFullYear() - birth.getFullYear();
+                if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
+                    age--;
+                }
+                option.textContent += ` (${age}岁)`;
+                
+                selector.appendChild(option);
+            });
+            
+            // 恢复选中值
+            if (currentChildId && children.some(c => c.id === currentChildId)) {
+                selector.value = currentChildId;
+            } else if (currentValue && children.some(c => c.id === currentValue)) {
+                selector.value = currentValue;
+            }
+            
+            // 更新儿童管理列表
+            updateChildrenManagementList();
+        }
+
+        // 更新儿童管理列表
+        function updateChildrenManagementList() {
+            const container = document.getElementById('children-list');
+            if (!container) return;
+            
+            if (children.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-gray-400">
+                        暂无儿童信息，请添加
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            children.forEach(child => {
+                // 计算年龄
+                const birth = new Date(child.birthday);
+                const today = new Date();
+                let age = today.getFullYear() - birth.getFullYear();
+                if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
+                    age--;
+                }
+                
+                const isCurrent = child.id === currentChildId;
+                html += `
+                <div class="p-3 rounded-lg ${isCurrent ? 'bg-primary/10 border border-primary/30' : 'bg-gray-50 border border-gray-100 hover:border-primary/30'} transition-all">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <div class="font-medium ${isCurrent ? 'text-primary' : ''}">${child.name}</div>
+                            <div class="text-xs text-neutral-dark/60 mt-0.5">
+                                ${child.gender === 'male' ? '男' : '女'}，${age}岁
+                            </div>
+                            ${child.notes ? `<div class="text-xs bg-gray-100 p-1 rounded mt-1">${child.notes}</div>` : ''}
+                            <div class="text-xs text-neutral-dark/60 mt-1">
+                                检测记录: ${child.records?.length || 0}条
+                            </div>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <button class="text-primary hover:text-primary/80 p-1" 
+                                onclick="selectChild('${child.id}')" title="选择">
+                                <i class="fa fa-check-circle"></i>
+                            </button>
+                            <button class="text-neutral-dark/60 hover:text-danger p-1" 
+                                onclick="deleteChild('${child.id}')" title="删除">
+                                <i class="fa fa-trash-o"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+        }
+
+        // 选择儿童
+        function selectChild(childId) {
+            currentChildId = childId;
+            localStorage.setItem('currentChildId', childId);
+            initChildSelector();
+            loadChildData(childId);
+            closeChildManagementModal();
+        }
+
+        // 删除儿童
+        function deleteChild(childId) {
+            if (!confirm('确定要删除该儿童及其所有检测记录吗？此操作不可恢复。')) return;
+            
+            const index = children.findIndex(c => c.id === childId);
+            if (index >= 0) {
+                const childName = children[index].name;
+                children.splice(index, 1);
+                localStorage.setItem('myopiaChildren', JSON.stringify(children));
+                
+                if (currentChildId === childId) {
+                    currentChildId = null;
+                    localStorage.removeItem('currentChildId');
+                    updateUIForNoChild();
+                }
+                
+                initChildSelector();
+                showNotification(`已删除儿童：${childName}`, 'success');
+            }
+        }
+
+        // 更新历史记录表
+        function updateHistoryTable(records) {
+            const tableBody = document.getElementById('history-table');
+            if (!tableBody) return;
+            
+            if (!records || records.length === 0) {
+                tableBody.innerHTML = `
+                    <tr class="text-center">
+                        <td colspan="8" class="py-8 text-gray-400">暂无检测记录</td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            // 按日期降序排列
+            const sorted = [...records].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            let html = '';
+            sorted.forEach(record => {
+                const date = new Date(record.date);
+                const formattedDate = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')}`;
+                
+                html += `
+                <tr class="hover:bg-gray-50 transition-colors">
+                    <td class="py-3 text-sm">${formattedDate}</td>
+                    <td class="py-3 text-sm">${record.axialLeft.toFixed(2)}</td>
+                    <td class="py-3 text-sm">${record.axialRight.toFixed(2)}</td>
+                    <td class="py-3 text-sm ${record.myopiaLeft < -0.5 ? 'text-danger' : ''}">${record.myopiaLeft.toFixed(2)}</td>
+                    <td class="py-3 text-sm ${record.myopiaRight < -0.5 ? 'text-danger' : ''}">${record.myopiaRight.toFixed(2)}</td>
+                    <td class="py-3 text-sm ${record.alcrLeft > 3.0 ? 'text-danger' : record.alcrLeft > 2.9 ? 'text-warning' : ''}">${record.alcrLeft.toFixed(2)}</td>
+                    <td class="py-3 text-sm ${record.alcrRight > 3.0 ? 'text-danger' : record.alcrRight > 2.9 ? 'text-warning' : ''}">${record.alcrRight.toFixed(2)}</td>
+                    <td class="py-3 text-sm">
+                        <div class="flex gap-1">
+                            <button onclick="editRecord('${record.id}')" class="text-primary hover:text-primary/80" title="编辑">
+                                <i class="fa fa-pencil"></i>
+                            </button>
+                            <button onclick="deleteRecord('${record.id}')" class="text-neutral-dark/60 hover:text-danger" title="删除">
+                                <i class="fa fa-trash-o"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                `;
+            });
+            
+            tableBody.innerHTML = html;
+        }
+
+        // 编辑记录
+        function editRecord(recordId) {
+            const child = getChildById(currentChildId);
+            if (!child || !child.records) return;
+            
+            const record = child.records.find(r => r.id === recordId);
+            if (record) {
+                populateFormWithRecord(record);
+                // 滚动到表单
+                document.getElementById('data-form').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        // 删除记录
+        function deleteRecord(recordId) {
+            if (!confirm('确定要删除这条检测记录吗？')) return;
+            
+            const child = getChildById(currentChildId);
+            if (!child || !child.records) return;
+            
+            const initialLength = child.records.length;
+            child.records = child.records.filter(r => r.id !== recordId);
+            
+            if (child.records.length < initialLength) {
+                localStorage.setItem('myopiaChildren', JSON.stringify(children));
+                updateHistoryTable(child.records);
+                updateChart(child.records);
+                
+                if (child.records.length === 0) {
+                    document.getElementById('result-container').classList.add('opacity-0', 'translate-y-4');
+                    document.getElementById('no-data-message').classList.remove('hidden');
+                } else {
+                    // 显示最新记录
+                    const last = child.records[child.records.length - 1];
+                    populateFormWithRecord(last);
+                    updateResultDisplay({
+                        myopiaLeft: last.myopiaLeft,
+                        myopiaRight: last.myopiaRight,
+                        alcrLeft: last.alcrLeft,
+                        alcrRight: last.alcrRight,
+                        avgCRLeft: (calculateCurvatureRadius(last.k1Left, 'r1-left') + calculateCurvatureRadius(last.k2Left, 'r2-left')) / 2,
+                        avgCRRight: (calculateCurvatureRadius(last.k1Right, 'r1-right') + calculateCurvatureRadius(last.k2Right, 'r2-right')) / 2,
+                        age: last.age
+                    });
+                }
+                
+                showNotification('已删除检测记录', 'success');
+            }
+        }
+
+        // 用记录数据填充表单
+        function populateFormWithRecord(record) {
+            document.getElementById('date').value = record.date;
+            document.getElementById('age').value = record.age;
+            document.getElementById('axial-left').value = record.axialLeft;
+            document.getElementById('axial-right').value = record.axialRight;
+            document.getElementById('k1-left').value = record.k1Left;
+            document.getElementById('k1-right').value = record.k1Right;
+            document.getElementById('k2-left').value = record.k2Left;
+            document.getElementById('k2-right').value = record.k2Right;
+            document.getElementById('acd-left').value = record.acdLeft;
+            document.getElementById('acd-right').value = record.acdRight;
+            
+            // 更新曲率半径显示
+            calculateCurvatureRadius(record.k1Left, 'r1-left');
+            calculateCurvatureRadius(record.k1Right, 'r1-right');
+            calculateCurvatureRadius(record.k2Left, 'r2-left');
+            calculateCurvatureRadius(record.k2Right, 'r2-right');
+            
+            // 更新前房深度警告
+            document.getElementById('acd-left-warning').classList.toggle('hidden', record.acdLeft <= 3.5);
+            document.getElementById('acd-right-warning').classList.toggle('hidden', record.acdRight <= 3.5);
+            
+            // 选择曲率模式
+            document.querySelector(`input[name="curvature-mode"][value="${record.curvatureMode}"]`).checked = true;
+        }
+
+        // 验证表单
+        function validateForm() {
+            let valid = true;
+            
+            // 验证年龄
+            const age = parseFloat(document.getElementById('age').value);
+            if (isNaN(age) || age < 3 || age > 18) {
+                markFieldInvalid('age', 'age-error', '年龄必须在3-18岁之间');
+                valid = false;
+            } else {
+                markFieldValid('age', 'age-error');
+            }
+            
+            // 验证眼轴长度
+            const axialLeft = parseFloat(document.getElementById('axial-left').value);
+            if (isNaN(axialLeft) || axialLeft < 18 || axialLeft > 30) {
+                markFieldInvalid('axial-left', 'axial-left-error', '请输入18-30之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('axial-left', 'axial-left-error');
+            }
+            
+            const axialRight = parseFloat(document.getElementById('axial-right').value);
+            if (isNaN(axialRight) || axialRight < 18 || axialRight > 30) {
+                markFieldInvalid('axial-right', 'axial-right-error', '请输入18-30之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('axial-right', 'axial-right-error');
+            }
+            
+            // 验证K1
+            const k1Left = parseFloat(document.getElementById('k1-left').value);
+            if (isNaN(k1Left) || k1Left < 38 || k1Left > 48) {
+                markFieldInvalid('k1-left', 'k1-left-error', '请输入38-48之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('k1-left', 'k1-left-error');
+            }
+            
+            const k1Right = parseFloat(document.getElementById('k1-right').value);
+            if (isNaN(k1Right) || k1Right < 38 || k1Right > 48) {
+                markFieldInvalid('k1-right', 'k1-right-error', '请输入38-48之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('k1-right', 'k1-right-error');
+            }
+            
+            // 验证K2
+            const k2Left = parseFloat(document.getElementById('k2-left').value);
+            if (isNaN(k2Left) || k2Left < 38 || k2Left > 48) {
+                markFieldInvalid('k2-left', 'k2-left-error', '请输入38-48之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('k2-left', 'k2-left-error');
+            }
+            
+            const k2Right = parseFloat(document.getElementById('k2-right').value);
+            if (isNaN(k2Right) || k2Right < 38 || k2Right > 48) {
+                markFieldInvalid('k2-right', 'k2-right-error', '请输入38-48之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('k2-right', 'k2-right-error');
+            }
+            
+            // 验证ACD
+            const acdLeft = parseFloat(document.getElementById('acd-left').value);
+            if (isNaN(acdLeft) || acdLeft < 1.5 || acdLeft > 5.0) {
+                markFieldInvalid('acd-left', 'acd-left-error', '请输入1.5-5.0之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('acd-left', 'acd-left-error');
+            }
+            
+            const acdRight = parseFloat(document.getElementById('acd-right').value);
+            if (isNaN(acdRight) || acdRight < 1.5 || acdRight > 5.0) {
+                markFieldInvalid('acd-right', 'acd-right-error', '请输入1.5-5.0之间的数值');
+                valid = false;
+            } else {
+                markFieldValid('acd-right', 'acd-right-error');
+            }
+            
+            // 如果无效，添加抖动动画
+            if (!valid) {
+                document.getElementById('data-form').classList.add('animate-shake');
+                setTimeout(() => {
+                    document.getElementById('data-form').classList.remove('animate-shake');
+                }, 500);
+            }
+            
+            return valid;
+        }
+
+        // 标记字段为无效
+        function markFieldInvalid(fieldId, errorId, message) {
+            const field = document.getElementById(fieldId);
+            const error = document.getElementById(errorId);
+            
+            if (field) field.classList.add('form-error');
+            if (error) {
+                error.textContent = message;
+                error.classList.remove('hidden');
+            }
+        }
+
+        // 标记字段为有效
+        function markFieldValid(fieldId, errorId) {
+            const field = document.getElementById(fieldId);
+            const error = document.getElementById(errorId);
+            
+            if (field) field.classList.remove('form-error');
+            if (error) error.classList.add('hidden');
+        }
+
+        // 初始化表单验证
+        function initFormValidation() {
+            // 为所有输入添加实时验证
+            const inputs = [
+                { id: 'age', min: 3, max: 18, errorId: 'age-error', message: '年龄必须在3-18岁之间' },
+                { id: 'axial-left', min: 18, max: 30, errorId: 'axial-left-error', message: '请输入18-30之间的数值' },
+                { id: 'axial-right', min: 18, max: 30, errorId: 'axial-right-error', message: '请输入18-30之间的数值' },
+                { id: 'k1-left', min: 38, max: 48, errorId: 'k1-left-error', message: '请输入38-48之间的数值' },
+                { id: 'k1-right', min: 38, max: 48, errorId: 'k1-right-error', message: '请输入38-48之间的数值' },
+                { id: 'k2-left', min: 38, max: 48, errorId: 'k2-left-error', message: '请输入38-48之间的数值' },
+                { id: 'k2-right', min: 38, max: 48, errorId: 'k2-right-error', message: '请输入38-48之间的数值' },
+                { id: 'acd-left', min: 1.5, max: 5.0, errorId: 'acd-left-error', message: '请输入1.5-5.0之间的数值' },
+                { id: 'acd-right', min: 1.5, max: 5.0, errorId: 'acd-right-error', message: '请输入1.5-5.0之间的数值' }
+            ];
+            
+            inputs.forEach(item => {
+                const el = document.getElementById(item.id);
+                if (el) {
+                    el.addEventListener('input', function() {
+                        const val = parseFloat(this.value);
+                        if (isNaN(val) || val < item.min || val > item.max) {
+                            markFieldInvalid(item.id, item.errorId, item.message);
+                        } else {
+                            markFieldValid(item.id, item.errorId);
+                        }
+                    });
+                }
+            });
+        }
+
+        // 初始化主题切换
+        function initThemeToggle() {
+            const toggle = document.getElementById('theme-toggle');
+            if (!toggle) return;
+            
+            // 检查本地存储的主题偏好
+            if (localStorage.getItem('myopiaTheme') === 'dark' || 
+                (!localStorage.getItem('myopiaTheme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.body.classList.add('dark-mode');
+                toggle.innerHTML = '<i class="fa fa-sun-o text-neutral-dark"></i>';
+            }
+            
+            toggle.addEventListener('click', function() {
+                const isDark = document.body.classList.toggle('dark-mode');
+                if (isDark) {
+                    localStorage.setItem('myopiaTheme', 'dark');
+                    this.innerHTML = '<i class="fa fa-sun-o text-neutral-dark"></i>';
+                    document.body.classList.add('bg-gray-900', 'text-gray-100');
+                    document.body.classList.remove('bg-neutral', 'text-neutral-dark');
+                    document.getElementById('navbar').classList.add('bg-gray-800');
+                    document.getElementById('navbar').classList.remove('bg-white');
+                } else {
+                    localStorage.setItem('myopiaTheme', 'light');
+                    this.innerHTML = '<i class="fa fa-moon-o text-neutral-dark"></i>';
+                    document.body.classList.remove('bg-gray-900', 'text-gray-100');
+                    document.body.classList.add('bg-neutral', 'text-neutral-dark');
+                    document.getElementById('navbar').classList.remove('bg-gray-800');
+                    document.getElementById('navbar').classList.add('bg-white');
+                }
+            });
+        }
+
+        // 初始化滚动效果
+        function initScrollEffects() {
+            const navbar = document.getElementById('navbar');
+            if (!navbar) return;
+            
+            window.addEventListener('scroll', function() {
+                if (window.scrollY > 10) {
+                    navbar.classList.add('py-2', 'shadow');
+                    navbar.classList.remove('py-4');
+                } else {
+                    navbar.classList.add('py-4');
+                    navbar.classList.remove('py-2', 'shadow');
+                }
+            });
+        }
+
+        // 导出数据
+        function exportData() {
+            const scope = document.querySelector('input[name="export-scope"]:checked').value;
+            const format = document.querySelector('input[name="export-format"]:checked').value;
+            
+            let data = {};
+            
+            if (scope === 'current' && currentChildId) {
+                const child = getChildById(currentChildId);
+                if (child) {
+                    data = { children: [child] };
+                }
+            } else {
+                data = { children: [...children] };
+            }
+            
+            let content = '';
+            let filename = '儿童近视监测数据';
+            let mimeType = '';
+            
+            if (format === 'json') {
+                content = JSON.stringify(data, null, 2);
+                filename += '.json';
+                mimeType = 'application/json';
+            } else {
+                // CSV格式
+                content = generateCSV(data);
+                filename += '.csv';
+                mimeType = 'text/csv';
+            }
+            
+            // 创建下载链接
+            const blob = new Blob([content], { type: mimeType });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            closeExportModal();
+            showNotification('数据导出成功', 'success');
+        }
+
+        // 生成CSV数据
+        function generateCSV(data) {
+            let csv = '';
+            
+            // 儿童信息表头
+            csv += '儿童ID,姓名,性别,出生日期,年龄,备注\n';
+            
+            // 儿童信息
+            data.children.forEach(child => {
+                const birth = new Date(child.birthday);
+                const today = new Date();
+                let age = today.getFullYear() - birth.getFullYear();
+                if (today.getMonth() < birth.getMonth() || (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) {
+                    age--;
+                }
+                
+                csv += `"${child.id}","${escapeCSV(child.name)}","${child.gender === 'male' ? '男' : '女'}","${child.birthday}","${age}","${escapeCSV(child.notes || '')}"\n`;
+                
+                // 如果有记录，添加记录
+                if (child.records && child.records.length > 0) {
+                    // 记录表头
+                    csv += ',检测日期,左眼轴(mm),右眼轴(mm),左眼K1,右眼K1,左眼K2,右眼K2,左眼前房深度,右眼前房深度,左眼度数(D),右眼度数(D),左眼AL/CR,右眼AL/CR\n';
+                    
+                    // 记录数据
+                    child.records.forEach(record => {
+                        csv += `,"${record.date}",${record.axialLeft},${record.axialRight},${record.k1Left},${record.k1Right},${record.k2Left},${record.k2Right},${record.acdLeft},${record.acdRight},${record.myopiaLeft},${record.myopiaRight},${record.alcrLeft},${record.alcrRight}\n`;
+                    });
+                }
+            });
+            
+            return csv;
+        }
+
+        // 转义CSV特殊字符
+        function escapeCSV(str) {
+            if (!str) return '';
+            return str.replace(/"/g, '""');
+        }
+
+        // 显示通知
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            const icon = document.getElementById('notification-icon');
+            const text = document.getElementById('notification-text');
+            
+            if (!notification || !icon || !text) return;
+            
+            // 设置通知类型
+            notification.className = 'fixed bottom-5 right-5 p-4 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300 z-50 max-w-xs';
+            
+            if (type === 'success') {
+                notification.classList.add('bg-success/10', 'border', 'border-success/30', 'text-success');
+                icon.className = 'fa fa-check-circle mr-2';
+            } else if (type === 'error') {
+                notification.classList.add('bg-danger/10', 'border', 'border-danger/30', 'text-danger');
+                icon.className = 'fa fa-exclamation-circle mr-2';
+            } else if (type === 'warning') {
+                notification.classList.add('bg-warning/10', 'border', 'border-warning/30', 'text-warning');
+                icon.className = 'fa fa-exclamation-triangle mr-2';
+            }
+            
+            text.textContent = message;
+            
+            // 显示通知
+            setTimeout(() => {
+                notification.classList.remove('translate-y-20', 'opacity-0');
+            }, 10);
+            
+            // 自动隐藏
+            setTimeout(() => {
+                notification.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+
+        // 无儿童选中时更新UI
+        function updateUIForNoChild() {
+            document.getElementById('current-child-name').textContent = '请选择儿童';
+            document.getElementById('calculate-btn').disabled = true;
+            document.getElementById('export-history-btn').disabled = true;
+            document.getElementById('clear-history').disabled = true;
+            
+            document.getElementById('history-table').innerHTML = `
+                <tr class="text-center">
+                    <td colspan="8" class="py-8 text-gray-400">请先添加并选择一个儿童</td>
+                </tr>
+            `;
+            
+            document.getElementById('result-container').classList.add('opacity-0', 'translate-y-4');
+            document.getElementById('no-data-message').classList.add('hidden');
+            document.getElementById('no-child-selected').classList.remove('hidden');
+            
+            initChart();
+        }
+
+        // 获取指定ID的儿童
+        function getChildById(id) {
+            return children.find(child => child.id === id) || null;
+        }
+
+        // 获取眼轴年增长预警值
+        function getAxialGrowthRate(age) {
+            for (const rate of axialGrowthRates) {
+                if (age >= rate.minAge && age < rate.maxAge) {
+                    return rate.rate;
+                }
+            }
+            return 0.05; // 默认值
+        }
+
+        // 检查本地存储是否可用
+        function isLocalStorageAvailable() {
+            try {
+                const key = '__storage_test__';
+                window.localStorage.setItem(key, key);
+                window.localStorage.removeItem(key);
+                return true;
+            } catch (e) {
+                return false;
+            }
+        }
+
+        // 暴露一些函数到全局，供HTML中的onclick使用
+        window.selectChild = selectChild;
+        window.deleteChild = deleteChild;
+        window.editRecord = editRecord;
+        window.deleteRecord = deleteRecord;
+    </script>
+</body>
+</html>
